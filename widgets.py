@@ -3,7 +3,7 @@ import cairo
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
-from concurrent.futures import ThreadPoolExecutor
+import threading
 from time import sleep
 
 class Rectangle:
@@ -12,10 +12,10 @@ class Rectangle:
 	def set(self, x1, y1, x2, y2):
 		self.x1, self.y1 = min(x1, x2), min(y1, y2)
 		self.x2, self.y2 = max(x1, x2), max(y1, y2)
-	def get(self): return (self.x1, self.y1, self.x2, self.y2)
 	def width(self): return self.x2 - self.x1
 	def height(self): return self.y2 - self.y1
 	def area(self): return self.width() * self.height()
+
 
 def debugEvent(*etc):
 	print (etc)
@@ -31,28 +31,22 @@ class Image(Gtk.Image):
 		self.connect('screen-changed', setVisual)
 		self.set_app_paintable(True)
 		self.rect = Rectangle(0, 0, 0, 0)
-
-		self.executor = ThreadPoolExecutor(max_workers=1)
-		self.redrawfuture = None
+		self.th = None
 
 	def redraw(self):
 		sleep(1/60)
-		self.redrawfuture = None # there is no future for me...
 		GLib.idle_add(self.queue_draw)
 
-	def drawOverlay(self, w, c):
-		screenrect = Rectangle(*c.clip_extents())
-		c.set_source_rgba(0, 0, 0, 0.8)
-		c.set_operator(cairo.OPERATOR_OVER)
-		if self.rect.area() > 0:
-			# cover everything except for the center rectangle
-			c.rectangle(screenrect.x1, screenrect.y1, screenrect.width(), self.rect.y1-screenrect.y1)
-			c.rectangle(screenrect.x1, self.rect.y1, self.rect.x1-screenrect.x1, self.rect.height())
-			c.rectangle(screenrect.x1, self.rect.y2, screenrect.width(), screenrect.y2-self.rect.y2)
-			c.rectangle(self.rect.x2, self.rect.y1, screenrect.x2-self.rect.x2, self.rect.height())
-		else:
-			c.rectangle(screenrect.x1, screenrect.y1, screenrect.width(), screenrect.height())
-		c.fill()
+	def drawOverlay(self, w, cairo_ctx):
+		screenrect = Rectangle(*cairo_ctx.clip_extents())
+		cairo_ctx.set_source_rgba(0, 0, 0, 0.8)
+		cairo_ctx.set_operator(cairo.OPERATOR_OVER)
+		cairo_ctx.rectangle(screenrect.x1, screenrect.y1, screenrect.width(), screenrect.height())
+		cairo_ctx.fill()
+
+		cairo_ctx.set_operator(cairo.OPERATOR_CLEAR)
+		cairo_ctx.rectangle(self.rect.x1, self.rect.y1, self.rect.width(), self.rect.height())
+		cairo_ctx.fill()
 	def getSelection(self):
 		return self.get_pixbuf().new_subpixbuf(
 			self.rect.x1, self.rect.y1, self.rect.width(), self.rect.height()
@@ -60,15 +54,17 @@ class Image(Gtk.Image):
 
 	def setRectangle(self, x1, y1, x2, y2):
 		self.rect.set(x1, y1, x2, y2)
-		if not self.redrawfuture:
-			self.redrawfuture = self.executor.submit(self.redraw)
+		if not self.th or not self.th.is_alive():
+			self.th = threading.Thread(target=self.redraw)
+			self.th.daemon = True
+			self.th.start()
 
 class Action(Gtk.MenuItem):
 	def __init__(self, action_name, icon_name=None, icon_size=24):
 		super().__init__()
 		b = Gtk.Box()
 		if icon_name:
-			img = Gtk.Image (
+			img = Gtk.Image(
 				icon_name=icon_name,
 				icon_size=icon_size,
 				pixel_size=icon_size
