@@ -12,3 +12,9 @@ GTK+ Screenshot app written in Python with Imgur support
  * Python 3
  * pip install pygobject
  * pip install requests
+
+## Compile and Run
+```
+$ make
+$ ./pyshot
+```
