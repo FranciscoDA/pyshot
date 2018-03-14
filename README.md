@@ -10,9 +10,6 @@ GTK+ Screenshot app written in Python with Imgur support
 
 ## Requirements
  * Python 3
- * pip install pygobject
- * pip install requests
-OR
  * pip install -r requirements.txt
 
 ## Compile and Run
