@@ -2,7 +2,6 @@
 from imagehost import ImageHost
 from requests import Session
 import threading
-import re
 
 apikey = '2cb56e4f1b7f361'
 class ImgurConnection(ImageHost):

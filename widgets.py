@@ -23,7 +23,7 @@ def debugEvent(*etc):
 def setVisual (w, ev=None):
 	w.set_visual(w.get_screen().get_rgba_visual())
 
-class Image(Gtk.Image):
+class ScreenshotOverlay(Gtk.Image):
 	def __init__(self,pb):
 		super().__init__()
 		self.set_from_pixbuf(pb)
@@ -85,17 +85,15 @@ class Window(Gtk.Window):
 		self.__dragstartx, self.__dragstarty = None, None
 		self.fullscreen()
 
+		self.context_menu = None
 		self.connect('screen-changed', setVisual)
 		self.connect('button-press-event', self.buttonPressed)
 		self.connect('button-release-event', self.buttonReleased)
 		self.connect('motion-notify-event', self.mouseMoved)
 
-	def set_image(self, im):
-		self.image = im
-		self.add(im)
-
-	def set_menu(self, menu):
-		self.menu = menu
+	def setOverlay(self, overlay):
+		self.image = overlay
+		self.add(overlay)
 
 	def show_all(self):
 		setVisual(self)
@@ -118,8 +116,8 @@ class Window(Gtk.Window):
 		if ev.button == 1:
 			self.image.setRectangle(self.__dragstartx, self.__dragstarty, ev.x, ev.y)
 			self.__dragstartx, self.__dragstarty = None, None
-			self.menu.show_all()
-			self.menu.popup(None, None, None, None, 0, Gdk.CURRENT_TIME)
+			self.context_menu.show_all()
+			self.context_menu.popup(None, None, None, None, 0, Gdk.CURRENT_TIME)
 			return True # stop repeated events
 
 	def mouseMoved(self, _, ev):
@@ -131,51 +129,50 @@ class Window(Gtk.Window):
 class PopupWindow(Gtk.Window):
 	def __init__(self):
 		super().__init__(Gtk.WindowType.TOPLEVEL)
+		self.set_size_request(180, 90)
 		self.set_position(Gtk.WindowPosition.CENTER)
+		self.set_resizable(False)
+		self.vbox = Gtk.VBox(False, 0)
+		self.add(self.vbox)
 		self.showIdleWait('Uploading...')
 
+	def clearVBox(self):
+		self.vbox.foreach(lambda w, *_: self.vbox.remove(w), None)
+
 	def showIdleWait(self, msg):
-		self.foreach(lambda w, *_: self.remove(w), None)
-		box = Gtk.VBox()
+		self.clearVBox()
 		sp = Gtk.Spinner()
 		sp.start()
-		box.pack_start(sp, False, False, 0)
-		l = Gtk.Label(msg)
-		box.pack_start(l, False, False, 0)
-		self.add(box)
+		self.vbox.pack_start(sp, True, True, 0)
+		self.vbox.pack_start(Gtk.Label(msg), True, False, 0)
 		self.show_all()
 
 	def showUrls(self, host_url=None, direct_url=None, delete_job=None):
-		self.foreach(lambda w, *_: self.remove(w), None)
-		box = Gtk.VBox()
+		self.clearVBox()
 		for (url,label) in zip((host_url, direct_url), ('Host URL:', 'Direct URL:')):
 			if not url:
 				continue
-			box.pack_start(Gtk.Label(label), False, False, 0)
+			self.vbox.pack_start(Gtk.Label(label), False, False, 0)
 			entry = Gtk.Entry(text=url, editable=False)
 			entry.connect('button-release-event', lambda w, ev: w.select_region(0, -1))
-			box.pack_start(entry, False, False, 0)
+			self.vbox.pack_start(entry, True, False, 0)
 		if delete_job is not None:
 			deletebtn = Gtk.Button(label='Delete')
 			deletebtn.connect('clicked', lambda *etc: delete_job())
-			box.pack_start(deletebtn, False, False, 0)
-		self.add(box)
+			self.vbox.pack_start(deletebtn, False, False, 0)
 		self.show_all()
 
-	def showOk(self, msg):
-		self.foreach(lambda w, *_: self.remove(w), None)
-		box = Gtk.VBox()
-		box.pack_start(Gtk.Image(icon_name='mail-signed-verified', pixel_size=32, icon_size=32), False, False, 0)
-		box.pack_start(Gtk.Label(msg), False, False, 0)
-		self.add(box)
+	def setMessageWithIcon(self, message, icon_name=None):
+		self.clearVBox()
+		if icon_name is not None:
+			img = Gtk.Image(icon_name='mail-signed-verified', pixel_size=32, icon_size=32)
+			self.vbox.pack_start(img, True, False, 0)
+		self.vbox.pack_start(Gtk.Label(message), True, False, 0)
+	def showOk(self, message):
+		self.setMessageWithIcon(message, 'mail-signed-verified')
 		self.show_all()
-
 	def showError(self, error):
-		self.foreach(lambda w, *_: self.remove(w), None)
-		box = Gtk.VBox()
-		box.pack_start(Gtk.Image(icon_name='network-error',pixel_size=32,icon_size=32), False, False, 0)
-		box.pack_start(Gtk.Label(error), False, False, 0)
-		self.add(box)
+		self.setMessageWithIcon(error, 'network-error')
 		self.show_all()
 
 	def show_all(self):

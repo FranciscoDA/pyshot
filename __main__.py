@@ -4,7 +4,7 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib
 
-from widgets import Image, Window, Menu, Action, PopupWindow, FileChooserSavePNGDialog
+from widgets import ScreenshotOverlay, Window, Menu, Action, PopupWindow, FileChooserSavePNGDialog
 from os.path import expanduser
 from pathlib import Path
 from imgur import ImgurConnection
@@ -35,7 +35,7 @@ class PopupWindowHandler:
 
 if __name__ == "__main__":
 	w = Window()
-	im = Image(Gdk.pixbuf_get_from_window(
+	overlay = ScreenshotOverlay(Gdk.pixbuf_get_from_window(
 		Gdk.get_default_root_window(), 0, 0,
 		Gdk.Screen.get_default().get_width(),
 		Gdk.Screen.get_default().get_height()
@@ -53,8 +53,10 @@ if __name__ == "__main__":
 		def save(fcd, response):
 			if response == Gtk.ResponseType.ACCEPT:
 				fn = fcd.get_filename()
+				if not fn.endswith('png'):
+					fn = '%s.png' % fn
 				if fn:
-					pb = im.getSelection()
+					pb = overlay.getSelection()
 					pb.savev(fn, 'png', [], [])
 			w.close()
 			Gtk.main_quit()
@@ -69,7 +71,7 @@ if __name__ == "__main__":
 
 		w.destroy()
 		pw.connect('delete-event', Gtk.main_quit)
-		pb = im.getSelection()
+		pb = overlay.getSelection()
 		b, imgdata = pb.save_to_bufferv('png', [], [])
 		pw.show_all()
 
@@ -80,24 +82,27 @@ if __name__ == "__main__":
 
 	def sendToImgur(*_):
 		sendToHost(ImgurConnection)
+	def sendToMockImageHost(*_):
+		sendToHost(MockImageHost)
 
 	def saveToPictures(*_):
 		preventQuit()
 		w.destroy()
 		Gtk.main_quit()
-		pb = im.getSelection()
+		pb = overlay.getSelection()
 		pb.savev(expanduser('~/Pictures/screenshot_%d.png' % time()), 'png', [], [])
 
-	for action, callback in [
+	for action, callback in (
 			(Action('Save as...', 'folder'), saveAs),
 			(Action('Quicksave in Pictures', 'folder-pictures'), saveToPictures),
-			(Action('Upload to Imgur'), sendToImgur)
-		]:
+			(Action('Upload to Imgur'), sendToImgur),
+			#(Action('Upload to MockImageHost'), sendToMockImageHost)
+		):
 		action.connect('activate', callback)
 		menu.add(action)
 
 
-	w.set_image(im)
-	w.set_menu(menu)
+	w.setOverlay(overlay)
+	w.context_menu = menu
 	w.show_all()
 	Gtk.main()
